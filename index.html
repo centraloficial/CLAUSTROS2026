@@ -60,16 +60,25 @@ details{background:var(--card);border:1px solid var(--line);border-radius:18px;p
 .dlg h3{margin:0 0 4px}
 #fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:25;background:var(--acc);color:#fff;min-height:54px;padding:0 20px;box-shadow:0 6px 18px #e85d3f66;font-size:15px}
 #msg{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;border-radius:16px;padding:9px 12px;display:none;gap:8px;align-items:center;z-index:50;max-width:700px;margin:auto}#msg.o{display:flex}#msg span{flex:1}#msg button{min-height:34px;background:#ffffff22;color:#fff}
-pre{background:var(--ink);color:#d9f0e5;padding:10px;border-radius:12px;overflow:auto;font-size:12px}.empty{text-align:center;color:var(--mut);padding:30px 0}
+pre{background:var(--ink);color:#d9f0e5;padding:10px;border-radius:12px;overflow:auto;font-size:12px}.frow{display:flex;align-items:center;gap:8px;width:100%;background:transparent;border-radius:12px;padding:6px 2px;min-height:46px;text-align:left;font-weight:400}
+.frow .fn{width:46%;min-width:0;font-size:13px;line-height:1.2}.frow .fn small{display:block;color:var(--mut);font-size:11px}
+.frow .fb{flex:1;height:12px;background:var(--sand);border-radius:9px;overflow:hidden}.frow .fb i{display:block;height:100%;background:var(--pri2);border-radius:9px}
+.frow .fv{width:54px;text-align:right;font-weight:800;color:var(--pri)}
+.hwrap{overflow-x:auto;margin-top:8px}.heat{border-collapse:separate;border-spacing:3px;font-size:12px;min-width:100%}
+.heat th{font-size:11px;color:var(--mut);font-weight:700;padding:2px}.heat th.nowh{color:var(--acc)}
+.heat td.f{font-weight:700;font-size:12px;min-width:112px;line-height:1.15;padding-right:4px}
+.heat td.c{text-align:center;border-radius:8px;padding:8px 3px;font-weight:700;min-width:38px}.heat td.sum{background:var(--sand)!important;color:var(--pri)!important}.heat tr{cursor:pointer}
+.empty{text-align:center;color:var(--mut);padding:30px 0}
 </style></head><body>
 <div class="top">
  <div class="r"><div class="logo">ER</div><h1>Agenda de visitas<small id="sub"></small></h1><span id="sync"><i></i><span></span></span><button id="who" data-open="dWho"></button></div>
- <div class="tabs"><button data-t="plan" class="on">Plan</button><button data-t="paso">Al paso</button><button data-t="bal">Balance</button><button data-t="exp">Explorar</button><button data-t="cfg">⚙</button></div>
+ <div class="tabs"><button data-t="plan" class="on">Plan</button><button data-t="paso">Al paso</button><button data-t="mapa">Mapa</button><button data-t="bal">Balance</button><button data-t="exp">Explorar</button><button data-t="cfg">⚙</button></div>
  <div id="cal"></div>
 </div>
 <main>
  <section id="s-plan" class="on"></section>
  <section id="s-paso"></section>
+ <section id="s-mapa"></section>
  <section id="s-bal"></section>
  <section id="s-exp"><input id="q" type="search" placeholder="Aula, materia, docente, carrera o facultad"><div class="sw" id="qd"></div><div id="qL"></div></section>
  <section id="s-cfg"></section>
@@ -201,6 +210,41 @@ function fila(r,p){
 }
 function ring(pct,size=74){const r=30,c=2*Math.PI*r,o=c*(1-Math.min(1,pct));return `<svg width="${size}" height="${size}" viewBox="0 0 74 74"><circle cx="37" cy="37" r="${r}" fill="none" stroke="#efe7da" stroke-width="9"/><circle cx="37" cy="37" r="${r}" fill="none" stroke="#2f7a5f" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${o}" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="15" font-weight="800" fill="#174d3c">${Math.round(pct*100)}%</text></svg>`}
 
+/* ----- Mapa de facultades: estudiantes en clase por hora, desde ahora ----- */
+let mv=LS.g('mapa_mv','all');
+function vMapa(){
+ const d=new Date();let dow=d.getDay(),t=nowM(),note='';
+ if(dow<1||dow>5){dow=1;t=0;note='Hoy no hay clases: se muestra el lunes completo.'}
+ else if(t>=22*60){dow=dow===5?1:dow+1;t=0;note='Ya terminaron las clases de hoy: se muestra el '+DN[dow]+' completo.'}
+ const rows=R.filter(r=>r.dow===dow),pend=mv==='pend';
+ const ok=r=>!pend||(!V[r.id]&&!covG.has(r.gk)&&!r.riv);
+ const pres=(fi,a,b)=>{let s=0;for(const r of rows)if(r.fi===fi&&r.ini<b&&r.fin>a&&ok(r))s+=r.n;return s};
+ const zon=fi=>[...new Set(rows.filter(r=>r.fi===fi).map(r=>r.z))].sort((a,b)=>ZORD.indexOf(a)-ZORD.indexOf(b)).join(', ');
+ const k=n=>n>=1000?(n/1000).toFixed(1).replace('.',',')+'k':String(n);
+ const FI=DATA.FAC.map((n,i)=>i);
+ let h=`<div class="box"><h4>Estudiantes por facultad</h4><p class="s">${note||DN[dow]+' · desde las '+hm(t)+' en adelante'}. Número = estudiantes que están en clase en esa hora${pend?' en aulas que aún no visitamos':''}.</p>
+ <div class="sw"><button data-mv="all" class="${mv==='all'?'on':''}">Todos en clase</button><button data-mv="pend" class="${mv==='pend'?'on':''}">Sin visitar</button></div></div>`;
+ if(!note&&t>=7*60&&t<22*60){
+  const now=FI.map(i=>[i,pres(i,t,t+1)]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]),mx=now[0]?.[1]||1,tot=now.reduce((s,x)=>s+x[1],0);
+  h+=`<div class="box"><b>Ahora mismo · ${hm(t)}</b><span class="s"> · ${fmt(tot)} estudiantes en clase</span>`
+   +now.map(([i,n],j)=>`<button class="frow" data-gofac="${i}"><span class="fn"><b>${j+1}. ${esc(DATA.FAC[i])}</b><small>zona ${zon(i)}</small></span><span class="fb"><i style="width:${n/mx*100}%"></i></span><span class="fv">${fmt(n)}</span></button>`).join('')
+   +`<p class="s">Toca una facultad para ver sus aulas.</p></div>`;
+ }
+ const T=[['MAÑANA',7*60,13*60],['TARDE',13*60,18*60],['NOCHE',18*60,22*60]];
+ for(const[nm,a,b]of T){
+  if(b<=t)continue;
+  const h0=Math.max(a,Math.floor(t/60)*60),hs=[];for(let x=h0;x<b;x+=60)hs.push(x);
+  const data=FI.map(i=>{const v=hs.map(x=>pres(i,Math.max(x,t),x+60));return{i,v,s:v.reduce((p,q)=>p+q,0)}}).filter(x=>x.s>0).sort((p,q)=>q.s-p.s);
+  if(!data.length)continue;
+  const mx=Math.max(...data.flatMap(x=>x.v),1);
+  h+=`<div class="box"><b>${nm}</b><span class="s"> · ${hs.length} h${h0>a?' (desde '+hm(h0)+')':''}</span>
+  <div class="hwrap"><table class="heat"><thead><tr><th></th>${hs.map(x=>`<th${x<=t&&t<x+60?' class="nowh"':''}>${String(x/60).padStart(2,'0')}h</th>`).join('')}<th>pico</th></tr></thead><tbody>`
+   +data.map(r=>`<tr data-gofac="${r.i}"><td class="f">${esc(DATA.FAC[r.i])}</td>${r.v.map(v=>{const q=v/mx;return`<td class="c" style="background:rgba(23,77,60,${v?(.12+q*.88).toFixed(2):0});color:${q>.55?'#fff':'inherit'}">${v?k(v):'·'}</td>`}).join('')}<td class="c sum">${k(Math.max(...r.v))}</td></tr>`).join('')
+   +`</tbody></table></div></div>`;
+ }
+ $('#s-mapa').innerHTML=h;
+}
+
 /* ----- vistas ----- */
 function vPlan(){
  const P=PLAN.filter(p=>p.f===fecha).sort((a,b)=>a.h-b.h),isT=fecha===today(),t=nowM();
@@ -294,7 +338,7 @@ function draw(){
  $('#cal').style.display=tab==='plan'?'flex':'none';$('#fab').style.display=tab==='paso'?'none':'';
  $('#sub').textContent=tab==='plan'?lbl(fecha):'Equipo de visitas';
  $('#who').textContent=yo?yo:'¿Quién eres?';sync();
- ({plan:vPlan,paso:vPaso,bal:vBal,exp:vExp,cfg:vCfg})[tab]();
+ ({plan:vPlan,paso:vPaso,mapa:vMapa,bal:vBal,exp:vExp,cfg:vCfg})[tab]();
 }
 function render(){cancelAnimationFrame(rq);rq=requestAnimationFrame(draw)}
 function go(t){tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='s-'+t));document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));scrollTo(0,0);render()}
@@ -305,7 +349,10 @@ function say(m,acts){const t=$('#msg');t.innerHTML=`<span>${esc(m)}</span>`;(act
 
 document.addEventListener('click',e=>{
  const b=e.target.closest('button'),d=e.target.closest('.dlg');
- if(d&&e.target===d)return close_();if(!b)return;const D=b.dataset;
+ if(d&&e.target===d)return close_();
+ const gf=e.target.closest('[data-gofac]');if(gf){mode='f';ff=gf.dataset.gofac;LS.s('ag_m',mode);LS.s('ag_f',ff);return go('paso')}
+ if(!b)return;const D=b.dataset;
+ if(D.mv){mv=D.mv;LS.s('mapa_mv',mv);return render()}
  if(D.close)return close_();if(D.open)return open_(D.open);
  if(D.t)return go(D.t);if(D.f){fecha=D.f;return render()}
  if(D.m){mode=D.m;LS.s('ag_m',mode);return render()}
@@ -320,7 +367,7 @@ document.addEventListener('click',e=>{
 });
 $('#q').addEventListener('input',()=>{qLim=40;vExp()});
 addEventListener('online',()=>sync());addEventListener('offline',()=>sync());
-setInterval(()=>{if((tab==='plan'||tab==='paso')&&!document.querySelector('.dlg.o'))render()},60000);
+setInterval(()=>{if((tab==='plan'||tab==='paso'||tab==='mapa')&&!document.querySelector('.dlg.o'))render()},60000);
 derive();if(!yo)setTimeout(()=>open_('dWho'),400);
 </script>
 <script type="module">
